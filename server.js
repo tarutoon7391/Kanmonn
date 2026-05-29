@@ -1,5 +1,5 @@
 // 関門海峡横断ゲーム（ZM連打クロール） サーバー
-// Express + Socket.io によるオンライン4人対戦
+// Express + Socket.io によるオンライン最大8人対戦（ホストがスタート操作）
 const express = require('express');
 const http = require('http');
 const path = require('path');
@@ -13,7 +13,8 @@ const io = new Server(server);
 app.use(express.static(path.join(__dirname, 'public'), { index: 'kanmon.html' }));
 
 // ゲーム定数
-const MAX_PLAYERS = 4;
+const MAX_PLAYERS = 8;
+const MIN_PLAYERS_TO_START = 2; // ホストがスタートできる最小人数
 const GOAL_DISTANCE = 1100; // m
 const STROKE_DISTANCE = 2;  // 1ストロークで前進する距離(m)
 const STAMINA_MAX = 100;
@@ -21,7 +22,8 @@ const STAMINA_DECAY_PER_SEC = 10;     // 連打が遅いと毎秒10%減
 const STROKE_INTERVAL_LIMIT = 800;    // 0.8秒以上空くとスタミナ減少
 const COUNTDOWN_SECONDS = 3;
 const BROADCAST_INTERVAL = 100;       // 100ms毎にgame_state送信
-const PLAYER_COLORS = ['blue', 'red', 'yellow', 'green'];
+// 最大8人分のレーン色
+const PLAYER_COLORS = ['blue', 'red', 'yellow', 'green', 'purple', 'orange', 'cyan', 'pink'];
 
 // ルーム管理: { [roomId]: roomObj }
 const rooms = {};
@@ -40,6 +42,7 @@ function findOrCreateRoom() {
   const room = {
     id,
     players: {},       // socketId -> player
+    hostId: null,      // ホストのsocketId（最初に参加したプレイヤー、退出時は次の参加者に自動移譲）
     started: false,
     finished: false,
     countdownStarted: false,
@@ -180,16 +183,32 @@ io.on('connection', (socket) => {
     currentRoom = room;
     currentPlayer = player;
 
+    // 最初の参加者をホストに設定
+    if (!room.hostId) {
+      room.hostId = socket.id;
+    }
+
     io.to(room.id).emit('room_update', {
       roomId: room.id,
       count: Object.keys(room.players).length,
       max: MAX_PLAYERS,
+      minToStart: MIN_PLAYERS_TO_START,
+      hostId: room.hostId,
       players: getPlayersInfo(room),
     });
+  });
 
-    if (Object.keys(room.players).length >= MAX_PLAYERS && !room.countdownStarted) {
-      startCountdown(room);
-    }
+  // ホストによるゲーム開始要求
+  socket.on('start_game', () => {
+    if (!currentRoom) return;
+    const room = currentRoom;
+    // ホストのみ開始可能
+    if (room.hostId !== socket.id) return;
+    // すでに開始済み・カウントダウン中は無視
+    if (room.started || room.countdownStarted) return;
+    // 最小人数チェック
+    if (Object.keys(room.players).length < MIN_PLAYERS_TO_START) return;
+    startCountdown(room);
   });
 
   // ストローク入力（Z/Mキー）
@@ -233,16 +252,23 @@ io.on('connection', (socket) => {
     if (!currentRoom) return;
     const room = currentRoom;
     if (room.players[socket.id]) {
-      // 進行中なら沈没扱い
+      // 進行中なら沈没扱い（プレイヤー情報は残す）
       if (room.started && !room.finished) {
         room.players[socket.id].sunk = true;
       } else {
         delete room.players[socket.id];
       }
+      // ホストが退出した場合、次の参加者にホストを自動移譲
+      if (room.hostId === socket.id) {
+        const nextIds = Object.keys(room.players).filter(id => id !== socket.id);
+        room.hostId = nextIds.length > 0 ? nextIds[0] : null;
+      }
       io.to(room.id).emit('room_update', {
         roomId: room.id,
         count: Object.keys(room.players).length,
         max: MAX_PLAYERS,
+        minToStart: MIN_PLAYERS_TO_START,
+        hostId: room.hostId,
         players: getPlayersInfo(room),
       });
       // 全員いなくなればルーム削除
