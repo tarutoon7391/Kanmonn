@@ -1,0 +1,321 @@
+<!doctype html>
+<html lang="ja">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1">
+<title>関門海峡横断ゲーム ZM連打クロール</title>
+<style>
+  :root {
+    --blue: #2a7fff;
+    --red: #ff4d4d;
+    --yellow: #ffcc1f;
+    --green: #2fbf57;
+    --bg: #0c1b2a;
+    --panel: #142a40;
+    --text: #f3f7fb;
+    --muted: #8aa3bd;
+  }
+  * { box-sizing: border-box; }
+  body {
+    margin: 0; font-family: "Hiragino Sans", "Yu Gothic", sans-serif;
+    background: linear-gradient(180deg, #0c1b2a 0%, #0a1422 100%);
+    color: var(--text); min-height: 100vh;
+  }
+  .wrap { max-width: 960px; margin: 0 auto; padding: 16px; }
+  h1 { margin: 0 0 12px; font-size: 22px; text-align: center; }
+  .panel {
+    background: var(--panel); border-radius: 12px; padding: 16px;
+    box-shadow: 0 4px 14px rgba(0,0,0,0.3); margin-bottom: 12px;
+  }
+  .hidden { display: none !important; }
+  button {
+    background: var(--blue); color: #fff; border: none; padding: 10px 18px;
+    border-radius: 8px; font-size: 16px; cursor: pointer;
+  }
+  button:disabled { background: #466; cursor: not-allowed; }
+  input[type=text] {
+    padding: 10px; font-size: 16px; border-radius: 8px; border: 1px solid #345;
+    background: #0a1726; color: #fff; width: 220px;
+  }
+  .row { display: flex; align-items: center; gap: 12px; flex-wrap: wrap; }
+  .muted { color: var(--muted); font-size: 13px; }
+  .countdown {
+    font-size: 64px; font-weight: bold; text-align: center; color: var(--yellow);
+  }
+
+  /* レース表示 */
+  .lanes { display: flex; flex-direction: column; gap: 8px; }
+  .lane {
+    background: #0a1726; border-radius: 8px; padding: 8px 10px;
+    border: 1px solid #20384f;
+  }
+  .lane.me { border-color: var(--blue); }
+  .lane.sunk { opacity: 0.4; filter: grayscale(0.8); }
+  .lane .name { font-weight: bold; font-size: 14px; display: flex; gap: 6px; align-items: center; }
+  .swimmer-color {
+    width: 10px; height: 10px; border-radius: 50%;
+  }
+  .bar-row {
+    position: relative; height: 28px; background: #061320;
+    border-radius: 6px; margin-top: 6px; overflow: hidden;
+    border: 1px solid #18324a;
+  }
+  .bar-fill {
+    position: absolute; left: 0; top: 0; bottom: 0; width: 0%;
+    background: linear-gradient(90deg, #1c3d63, #2a7fff);
+  }
+  .swimmer {
+    position: absolute; top: 2px; font-size: 20px; transform: translateX(-50%);
+    transition: left 0.1s linear;
+  }
+  .marker {
+    position: absolute; top: 0; bottom: 0; width: 2px; background: #466;
+  }
+  .marker.start { left: 0; }
+  .marker.goal { right: 0; background: var(--yellow); }
+  .endpoints {
+    display: flex; justify-content: space-between;
+    font-size: 11px; color: var(--muted); margin-top: 2px;
+  }
+  .stamina-row { margin-top: 6px; }
+  .stamina-bar {
+    position: relative; height: 8px; background: #0a1726;
+    border-radius: 4px; overflow: hidden; border: 1px solid #18324a;
+  }
+  .stamina-fill {
+    height: 100%; width: 100%;
+    background: var(--green); transition: width 0.1s linear, background 0.1s;
+  }
+  .meta { font-size: 12px; color: var(--muted); }
+
+  /* 結果 */
+  table { width: 100%; border-collapse: collapse; }
+  th, td { padding: 6px 8px; border-bottom: 1px solid #20384f; text-align: left; font-size: 14px; }
+  th { color: var(--muted); font-weight: normal; }
+  .rank-1 { color: var(--yellow); font-weight: bold; }
+
+  .keys-help {
+    text-align: center; margin-top: 8px; color: var(--muted); font-size: 13px;
+  }
+  .key-btns { display: flex; gap: 16px; justify-content: center; margin-top: 8px; }
+  .key-btn {
+    width: 80px; height: 80px; border-radius: 12px;
+    background: #1f3a59; color: #fff; font-size: 28px; font-weight: bold;
+    border: 2px solid #2a7fff; user-select: none; touch-action: manipulation;
+  }
+  .key-btn:active { background: var(--blue); }
+</style>
+</head>
+<body>
+<div class="wrap">
+  <h1>🌊 関門海峡横断ゲーム ZM連打クロール 🌊</h1>
+
+  <!-- 待機画面 -->
+  <div id="screen-lobby" class="panel">
+    <div class="row">
+      <label>名前:</label>
+      <input id="nameInput" type="text" maxlength="16" placeholder="プレイヤー名">
+      <button id="joinBtn">ルームに参加</button>
+    </div>
+    <div id="lobbyStatus" class="muted" style="margin-top:10px;">名前を入力してルームに参加してください。</div>
+    <ul id="lobbyPlayers" style="margin-top:8px;"></ul>
+  </div>
+
+  <!-- カウントダウン画面 -->
+  <div id="screen-countdown" class="panel hidden">
+    <div class="muted" style="text-align:center;">まもなくスタート！</div>
+    <div id="countdownNum" class="countdown">3</div>
+  </div>
+
+  <!-- ゲーム画面 -->
+  <div id="screen-game" class="panel hidden">
+    <div class="row" style="justify-content:space-between;">
+      <div class="muted">門司 → 下関（1100m）</div>
+      <div class="muted">経過: <span id="elapsed">0.00</span> 秒</div>
+    </div>
+    <div id="lanes" class="lanes" style="margin-top:10px;"></div>
+    <div class="keys-help">[Z] と [M] を<strong>交互に</strong>連打して泳げ！</div>
+    <div class="key-btns">
+      <button class="key-btn" id="btnZ">Z</button>
+      <button class="key-btn" id="btnM">M</button>
+    </div>
+  </div>
+
+  <!-- 結果画面 -->
+  <div id="screen-result" class="panel hidden">
+    <h2 style="margin-top:0;">レース結果</h2>
+    <table id="resultTable">
+      <thead><tr><th>順位</th><th>名前</th><th>距離</th><th>タイム</th><th>状態</th></tr></thead>
+      <tbody></tbody>
+    </table>
+    <h3 style="margin-top:18px;">🏆 グローバルランキング TOP10</h3>
+    <table id="rankingTable">
+      <thead><tr><th>順位</th><th>名前</th><th>タイム</th></tr></thead>
+      <tbody></tbody>
+    </table>
+    <div style="text-align:center; margin-top:14px;">
+      <button id="againBtn">もう一度</button>
+    </div>
+  </div>
+</div>
+
+<script src="/socket.io/socket.io.js"></script>
+<script>
+  const socket = io();
+
+  // 画面要素
+  const screens = {
+    lobby: document.getElementById('screen-lobby'),
+    countdown: document.getElementById('screen-countdown'),
+    game: document.getElementById('screen-game'),
+    result: document.getElementById('screen-result'),
+  };
+  function show(name) {
+    for (const k of Object.keys(screens)) {
+      screens[k].classList.toggle('hidden', k !== name);
+    }
+  }
+
+  // 状態
+  let myId = null;
+  let startTime = 0;
+  let elapsedTimer = null;
+
+  // 参加処理
+  const nameInput = document.getElementById('nameInput');
+  const joinBtn = document.getElementById('joinBtn');
+  const lobbyStatus = document.getElementById('lobbyStatus');
+  const lobbyPlayers = document.getElementById('lobbyPlayers');
+  joinBtn.addEventListener('click', () => {
+    const name = nameInput.value.trim() || '名無し';
+    socket.emit('join_room', { name });
+    joinBtn.disabled = true;
+    nameInput.disabled = true;
+    lobbyStatus.textContent = 'ルームに参加中…';
+  });
+
+  socket.on('connect', () => { myId = socket.id; });
+
+  socket.on('room_update', ({ count, max, players }) => {
+    lobbyStatus.textContent = `${count}/${max}人が参加済み（4人揃うと開始）`;
+    lobbyPlayers.innerHTML = players.map(p =>
+      `<li><span class="swimmer-color" style="display:inline-block;background:${colorOf(p.color)}"></span> ${escapeHtml(p.name)}</li>`
+    ).join('');
+  });
+
+  socket.on('countdown', ({ count }) => {
+    show('countdown');
+    document.getElementById('countdownNum').textContent = count > 0 ? count : 'スタート！';
+  });
+
+  socket.on('game_start', ({ startTime: t }) => {
+    startTime = t;
+    show('game');
+    if (elapsedTimer) clearInterval(elapsedTimer);
+    elapsedTimer = setInterval(() => {
+      const e = (Date.now() - startTime) / 1000;
+      document.getElementById('elapsed').textContent = e.toFixed(2);
+    }, 100);
+    renderLanes([]);
+  });
+
+  socket.on('game_state', ({ players }) => {
+    renderLanes(players);
+  });
+
+  socket.on('finish', ({ time }) => {
+    console.log('ゴール！ タイム:', time);
+  });
+
+  socket.on('game_result', ({ players, ranking }) => {
+    if (elapsedTimer) { clearInterval(elapsedTimer); elapsedTimer = null; }
+    const tbody = document.querySelector('#resultTable tbody');
+    tbody.innerHTML = players.map(p => `
+      <tr class="${p.rank === 1 && p.finished ? 'rank-1' : ''}">
+        <td>${p.rank}</td>
+        <td><span class="swimmer-color" style="display:inline-block;background:${colorOf(p.color)}"></span> ${escapeHtml(p.name)}</td>
+        <td>${Math.round(p.distance)}m</td>
+        <td>${p.finished ? p.time.toFixed(2) + '秒' : '—'}</td>
+        <td>${p.finished ? 'ゴール' : '沈没'}</td>
+      </tr>
+    `).join('');
+    const rtbody = document.querySelector('#rankingTable tbody');
+    rtbody.innerHTML = (ranking && ranking.length)
+      ? ranking.map((r, i) => `<tr><td>${i+1}</td><td>${escapeHtml(r.name)}</td><td>${r.time.toFixed(2)}秒</td></tr>`).join('')
+      : '<tr><td colspan="3" class="muted">まだ記録がありません</td></tr>';
+    show('result');
+  });
+
+  document.getElementById('againBtn').addEventListener('click', () => {
+    location.reload();
+  });
+
+  // キー入力
+  function sendStroke(key) {
+    socket.emit('stroke', { key });
+  }
+  window.addEventListener('keydown', (e) => {
+    if (e.repeat) return;
+    if (screens.game.classList.contains('hidden')) return;
+    const k = e.key.toUpperCase();
+    if (k === 'Z') sendStroke('Z');
+    else if (k === 'M') sendStroke('M');
+  });
+  document.getElementById('btnZ').addEventListener('click', () => sendStroke('Z'));
+  document.getElementById('btnM').addEventListener('click', () => sendStroke('M'));
+
+  // 描画ヘルパ
+  function colorOf(c) {
+    return ({ blue:'#2a7fff', red:'#ff4d4d', yellow:'#ffcc1f', green:'#2fbf57' })[c] || '#fff';
+  }
+  function staminaColor(s) {
+    if (s > 60) return '#2fbf57';
+    if (s > 30) return '#ffcc1f';
+    return '#ff4d4d';
+  }
+  function escapeHtml(s) {
+    return String(s).replace(/[&<>"']/g, ch => ({
+      '&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'
+    }[ch]));
+  }
+
+  const lanesEl = document.getElementById('lanes');
+  function renderLanes(players) {
+    players.sort((a, b) => {
+      if (a.id === myId) return -1;
+      if (b.id === myId) return 1;
+      return 0;
+    });
+    lanesEl.innerHTML = players.map(p => {
+      const pct = Math.min(100, (p.distance / 1100) * 100);
+      const isMe = (p.id === myId);
+      const sunk = p.sunk;
+      const swimEmoji = sunk ? '💀' : (p.finished ? '🏁' : '🏊');
+      return `
+        <div class="lane ${isMe ? 'me' : ''} ${sunk ? 'sunk' : ''}">
+          <div class="name">
+            <span class="swimmer-color" style="background:${colorOf(p.color)}"></span>
+            ${escapeHtml(p.name)} ${isMe ? '(あなた)' : ''}
+            <span class="meta" style="margin-left:auto;">
+              ${Math.round(p.distance)}m ${p.finished ? '・' + p.time.toFixed(2) + '秒' : ''}
+            </span>
+          </div>
+          <div class="bar-row">
+            <div class="bar-fill" style="width:${pct}%; background: linear-gradient(90deg,#1c3d63, ${colorOf(p.color)});"></div>
+            <div class="marker start"></div>
+            <div class="marker goal"></div>
+            <div class="swimmer" style="left:${pct}%;">${swimEmoji}</div>
+          </div>
+          <div class="endpoints"><span>門司</span><span>下関</span></div>
+          <div class="stamina-row">
+            <div class="stamina-bar">
+              <div class="stamina-fill" style="width:${p.stamina}%; background:${staminaColor(p.stamina)};"></div>
+            </div>
+          </div>
+        </div>
+      `;
+    }).join('');
+  }
+</script>
+</body>
+</html>

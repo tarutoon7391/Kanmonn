@@ -1,0 +1,13 @@
+{
+  "name": "kanmonn",
+  "version": "1.0.0",
+  "description": "関門海峡横断ゲーム（ZM連打クロール） オンライン4人対戦",
+  "main": "server.js",
+  "scripts": {
+    "start": "node server.js"
+  },
+  "dependencies": {
+    "express": "^4.19.2",
+    "socket.io": "^4.7.5"
+  }
+}
