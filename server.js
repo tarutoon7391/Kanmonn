@@ -16,7 +16,10 @@ app.use(express.static(path.join(__dirname, 'public'), { index: 'kanmon.html' })
 const MAX_PLAYERS = 8;
 const MIN_PLAYERS_TO_START = 2; // ホストがスタートできる最小人数
 const GOAL_DISTANCE = 1100; // m
-const STROKE_DISTANCE = 2;  // 1ストロークで前進する距離(m)
+const STROKE_DISTANCE = 1;  // 1ストロークで前進する距離(m)（基本巡航スピード）
+// 直線一気: ゴール手前の最終直線区間では1ストロークあたりの前進量を増やしてラストスパートを演出する
+const FINAL_SPRINT_DISTANCE = 150;       // ゴール手前 何m を「直線一気」区間とするか
+const FINAL_SPRINT_STROKE_DISTANCE = 1.8; // 直線一気区間での1ストロークの前進量(m)
 const STAMINA_MAX = 100;
 const STAMINA_DECAY_PER_SEC = 10;     // 連打が遅いと毎秒10%減
 const STROKE_INTERVAL_LIMIT = 800;    // 0.8秒以上空くとスタミナ減少
@@ -226,7 +229,11 @@ io.on('connection', (socket) => {
     }
     p.lastKey = k;
     p.lastStrokeAt = Date.now();
-    p.distance += STROKE_DISTANCE;
+    // 直線一気: ゴール手前の最終直線区間に入っていれば前進量を引き上げる
+    const stride = (p.distance >= GOAL_DISTANCE - FINAL_SPRINT_DISTANCE)
+      ? FINAL_SPRINT_STROKE_DISTANCE
+      : STROKE_DISTANCE;
+    p.distance += stride;
     // ストローク成功時はスタミナを少し回復（連打維持で全快を保てる程度）
     p.stamina = Math.min(STAMINA_MAX, p.stamina + 1);
     if (p.distance >= GOAL_DISTANCE && !p.finished) {
