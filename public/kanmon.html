@@ -119,6 +119,10 @@
     </div>
     <div id="lobbyStatus" class="muted" style="margin-top:10px;">名前を入力してルームに参加してください。</div>
     <ul id="lobbyPlayers" style="margin-top:8px;"></ul>
+    <div id="lobbyHostArea" style="margin-top:10px;">
+      <button id="startBtn" class="hidden">スタート</button>
+      <div id="waitHostMsg" class="muted hidden">ホストのスタート待ち...</div>
+    </div>
   </div>
 
   <!-- カウントダウン画面 -->
@@ -196,11 +200,35 @@
 
   socket.on('connect', () => { myId = socket.id; });
 
-  socket.on('room_update', ({ count, max, players }) => {
-    lobbyStatus.textContent = `${count}/${max}人が参加済み（4人揃うと開始）`;
+  socket.on('room_update', ({ count, max, minToStart, hostId, players }) => {
+    const min = minToStart || 2;
+    const isHost = (hostId === myId);
+    const hostPlayer = players.find(p => p.id === hostId);
+    const hostName = hostPlayer ? hostPlayer.name : '—';
+    lobbyStatus.textContent = `${count}/${max}人が参加済み（${min}人以上でホストが開始可能） / ホスト: ${hostName}`;
     lobbyPlayers.innerHTML = players.map(p =>
-      `<li><span class="swimmer-color" style="display:inline-block;background:${colorOf(p.color)}"></span> ${escapeHtml(p.name)}</li>`
+      `<li><span class="swimmer-color" style="display:inline-block;background:${colorOf(p.color)}"></span> ${escapeHtml(p.name)}${p.id === hostId ? ' 👑(ホスト)' : ''}${p.id === myId ? ' (あなた)' : ''}</li>`
     ).join('');
+
+    // スタートボタン / 待機メッセージの表示制御
+    const startBtn = document.getElementById('startBtn');
+    const waitHostMsg = document.getElementById('waitHostMsg');
+    if (isHost) {
+      startBtn.classList.remove('hidden');
+      startBtn.disabled = (count < min);
+      startBtn.textContent = (count < min)
+        ? `スタート（あと${min - count}人必要）`
+        : 'スタート';
+      waitHostMsg.classList.add('hidden');
+    } else {
+      startBtn.classList.add('hidden');
+      waitHostMsg.classList.remove('hidden');
+    }
+  });
+
+  // ホスト用スタートボタン
+  document.getElementById('startBtn').addEventListener('click', () => {
+    socket.emit('start_game');
   });
 
   socket.on('countdown', ({ count }) => {
@@ -266,7 +294,10 @@
 
   // 描画ヘルパ
   function colorOf(c) {
-    return ({ blue:'#2a7fff', red:'#ff4d4d', yellow:'#ffcc1f', green:'#2fbf57' })[c] || '#fff';
+    return ({
+      blue: '#2a7fff', red: '#ff4d4d', yellow: '#ffcc1f', green: '#2fbf57',
+      purple: '#a259ff', orange: '#ff8c2a', cyan: '#2ad4ff', pink: '#ff6fb5'
+    })[c] || '#fff';
   }
   function staminaColor(s) {
     if (s > 60) return '#2fbf57';
