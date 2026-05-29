@@ -16,7 +16,7 @@ app.use(express.static(path.join(__dirname, 'public'), { index: 'kanmon.html' })
 const MAX_PLAYERS = 8;
 const MIN_PLAYERS_TO_START = 2; // ホストがスタートできる最小人数
 const GOAL_DISTANCE = 1100; // m
-const STROKE_DISTANCE = 2;  // 1ストロークで前進する距離(m)
+const STROKE_DISTANCE = 8;  // 1ストロークで前進する距離(m)
 const STAMINA_MAX = 100;
 const STAMINA_DECAY_PER_SEC = 10;     // 連打が遅いと毎秒10%減
 const STROKE_INTERVAL_LIMIT = 800;    // 0.8秒以上空くとスタミナ減少
