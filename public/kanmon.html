@@ -73,6 +73,11 @@
   }
   .marker.start { left: 0; }
   .marker.goal { right: 0; background: var(--yellow); }
+  /* 直線一気（最終直線区間）の開始位置を示すマーカー */
+  .marker.final-sprint {
+    background: var(--red);
+    opacity: 0.7;
+  }
   .endpoints {
     display: flex; justify-content: space-between;
     font-size: 11px; color: var(--muted); margin-top: 2px;
@@ -310,6 +315,10 @@
     }[ch]));
   }
 
+  // ゲーム定数（サーバー側と一致させる）
+  const GOAL_DISTANCE = 1100;
+  const FINAL_SPRINT_DISTANCE = 150; // ゴール手前 何mが「直線一気」区間か
+
   const lanesEl = document.getElementById('lanes');
   function renderLanes(players) {
     players.sort((a, b) => {
@@ -317,8 +326,9 @@
       if (b.id === myId) return 1;
       return 0;
     });
+    const finalSprintPct = ((GOAL_DISTANCE - FINAL_SPRINT_DISTANCE) / GOAL_DISTANCE) * 100;
     lanesEl.innerHTML = players.map(p => {
-      const pct = Math.min(100, (p.distance / 1100) * 100);
+      const pct = Math.min(100, (p.distance / GOAL_DISTANCE) * 100);
       const isMe = (p.id === myId);
       const sunk = p.sunk;
       const swimEmoji = sunk ? '💀' : (p.finished ? '🏁' : '🏊');
@@ -334,6 +344,7 @@
           <div class="bar-row">
             <div class="bar-fill" style="width:${pct}%; background: linear-gradient(90deg,#1c3d63, ${colorOf(p.color)});"></div>
             <div class="marker start"></div>
+            <div class="marker final-sprint" style="left:${finalSprintPct}%;"></div>
             <div class="marker goal"></div>
             <div class="swimmer" style="left:${pct}%;">${swimEmoji}</div>
           </div>
